@@ -1,4 +1,4 @@
-Mandelbulb Visualizer
+
 This project is a simple Mandelbulb visualizer built using Python's tkinter library. It generates a 2D projection of the 3D Mandelbulb fractal using ray marching techniques.
 
 Customization
