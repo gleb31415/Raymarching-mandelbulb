@@ -1,78 +1,109 @@
 import tkinter as tk
-import math
-from objects import Mandelbulb
+from Objects import Circle, Rectangle, Triangle
+import time
 
 root = tk.Tk()
+root.title("2D Ray Marching")
 
 width, height = 800, 800
-cams = (-3, 0, 0)
-light = (-5, 5, -10)
-ang = math.radians(30)
-close = 0.001
-far = 10
+lb, ub = 0.1, 800
+camx, camy = None, None
+rx, ry = 0, 0
 
 
-canvas = tk.Canvas(root, width=width, height=height, background='white')
+def set_camera(event):
+    global camx, camy
+    canvas.delete("camera")
+    canvas.delete("anim")
+    x, y = event.x, event.y
+    rad = 3
+    canvas.create_oval(x - rad, y - rad, x + rad, y + rad, fill='white', tags="camera")
+    camx, camy = x, y
+    canvas.unbind("<Button-1>")
+    canvas.bind("<Button-1>", set_ray)
+    canvas.tag_raise("camera")
+
+
+def set_ray(event):
+    global camx, camy, rx, ry
+    if camx is None or camy is None:
+        return
+
+    x, y = event.x, event.y
+    k = (y - camy) / (x - camx)
+    b = camy - k * camx
+    canvas.delete("base_ray")
+    if x > camx:
+        canvas.create_line(camx, camy, width, width * k + b, fill='yellow', tags="base_ray")
+    else:
+        canvas.create_line(camx, camy, 0, b, fill='yellow', tags="base_ray")
+    rx, ry = x, y
+    start_animation(k, b)
+    canvas.tag_raise("base_ray")
+
+
+def start_animation(k, b):
+    for obj in objects:
+        obj.plot(canvas)
+    canvas.tag_raise("camera")
+    canvas.tag_raise("base_ray")
+    x, y = camx, camy
+    r = calc_min_dist(objects, x, y)
+    canvas.delete("anim")
+    while lb < r < ub:
+        canvas.create_oval(x - r, y - r, x + r, y + r, outline='red', tags="anim")
+
+        dx = r / ((1 + k ** 2) ** 0.5)
+        dy = k * dx
+
+        if rx >= camx:
+            x += dx
+            y += dy
+        else:
+            x -= dx
+            y -= dy
+
+        r = calc_min_dist(objects, x, y)
+        canvas.update()
+        time.sleep(0.2)
+
+
+def calc_min_dist(objects, x, y):
+    min_dist = float('inf')
+    for obj in objects:
+        min_dist = min(min_dist, obj.dist(x, y))
+    return min_dist
+
+
+def activate_camera():
+    for obj in objects:
+        obj.plot(canvas)
+    canvas.delete("cam")
+    canvas.delete("base_ray")
+    canvas.delete("anim")
+    canvas.bind("<Button-1>", set_camera)
+
+
+objects = [
+    Circle(150, 150, 50),
+    Circle(650, 150, 50),
+    Circle(150, 650, 50),
+    Circle(650, 650, 50),
+
+    Rectangle(400, 150, 100, 200, 0),
+    Rectangle(150, 400, 200, 100, 45),
+    Rectangle(650, 400, 200, 100, 45),
+    Rectangle(400, 650, 100, 200, 0),
+
+    Triangle(400, 130, 350, 400, 450, 400),
+    Triangle(200, 550, 150, 650, 250, 650),
+    Triangle(60, 50, 190, 140, 210, 300),
+    Triangle(400, 750, 350, 850, 450, 850)
+]
+
+canvas = tk.Canvas(root, width=width, height=height, background='black')
+camera_button = tk.Button(root, text="Set Camera", command=activate_camera)
+camera_button.pack()
 canvas.pack()
-
-
-def get_to_norm(vec):
-    length = math.sqrt(vec[0]**2 + vec[1]**2 + vec[2] ** 2)
-    return vec[0] / length, vec[1] / length, vec[2] / length
-
-
-def scal(p, q):
-    return p[0] * q[0] + p[1] * q[1] + p[2] * q[2]
-
-
-def normal(point, eps=1e-4):
-    x, y, z = point
-    dx = (object.sdf((x + eps, y, z)) - object.sdf((x - eps, y, z))) / (2 * eps)
-    dy = (object.sdf((x, y + eps, z)) - object.sdf((x, y - eps, z))) / (2 * eps)
-    dz = (object.sdf((x, y, z + eps)) - object.sdf((x, y, z - eps))) / (2 * eps)
-    return dx, dy, dz
-
-
-def toreal(point, r, al, be):
-    x0, y0, z0 = point
-    x = x0 + r * math.cos(al) * math.cos(be)
-    y = y0 + r * math.sin(al) * math.cos(be)
-    z = z0 + r * math.sin(be)
-    return x, y, z
-
-
-def get_light_intensity(point):
-    l_v = get_to_norm((light[0] - point[0], light[1] - point[1], light[2] - point[2]))
-    p_v = get_to_norm(normal(point))
-    intensity = max(0, scal(l_v, p_v))
-    return int(intensity * 255)
-
-
-object = Mandelbulb()
-
-
-def get_col(point, al, be):
-    x, y, z = point
-    dist = object.sdf(point)
-    while close < dist < far:
-        x, y, z = toreal((x, y, z), dist, al, be)
-        dist = object.sdf((x, y, z))
-        if dist >= far:
-            return 0, 0, 30
-        if dist <= close:
-            intensity = get_light_intensity((x, y, z))
-            blue_intensity = int(intensity * 0.8)
-            return 0, int(intensity * 0.9), blue_intensity
-
-
-for i in range(width):
-    for j in range(height):
-        dx, dy = i - width / 2, j - height / 2
-        a = math.atan2(dx, width / 2) * ang
-        b = math.atan2(dy, height / 2) * ang
-
-        color = get_col(cams, a, b)
-        col = f'#{color[0]:02x}{color[1]:02x}{color[2]:02x}'
-        canvas.create_line(i, j, i + 1, j, fill=col)
 
 root.mainloop()
